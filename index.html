@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="多路计时器">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>多路计时器</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: #0b1220;
+    color: #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding-bottom: env(safe-area-inset-bottom);
+    user-select: none;
+  }
+  .header {
+    position: sticky; top: 0; z-index: 10;
+    padding: calc(14px + env(safe-area-inset-top)) 14px 12px;
+    background: linear-gradient(180deg, #111c33, #0b1220);
+  }
+  .title-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+  .title { font-size: 20px; font-weight: 700; }
+  .count { font-size: 12px; color: #94a3b8; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    padding: 7px 13px; border-radius: 999px; font-size: 13px;
+    border: 1px solid #334155; color: #cbd5e1; background: #1e293b; cursor: pointer;
+  }
+  .btn-primary { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    padding: 4px 12px 20px;
+  }
+  .card {
+    background: #111c33; border-radius: 12px; padding: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3); min-width: 0;
+  }
+  .card.done { opacity: .85; }
+  .card-head { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .name { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .tags { display: flex; gap: 6px; margin: 6px 0 2px; flex-wrap: wrap; }
+  .tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; }
+  .tag-idle { background: #334155; color: #cbd5e1; }
+  .tag-running { background: rgba(59,130,246,.18); color: #60a5fa; }
+  .tag-paused { background: rgba(251,191,36,.18); color: #fbbf24; }
+  .tag-done { background: rgba(52,211,153,.18); color: #34d399; }
+  .mode-tag { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: rgba(168,85,247,.18); color: #c084fc; }
+  .time { font-size: 30px; font-weight: 700; letter-spacing: .5px; margin: 8px 0 8px; font-variant-numeric: tabular-nums; }
+  .progress { height: 5px; background: #1e293b; border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+  .progress-bar { height: 100%; border-radius: 999px; transition: width .2s linear; }
+  .controls { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ctl {
+    padding: 6px 10px; border-radius: 999px; font-size: 11px;
+    background: #1e293b; color: #cbd5e1; border: 1px solid #334155; cursor: pointer;
+  }
+  .ctl-start { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+  .ctl-warn { background: #f59e0b; color: #0b1220; border-color: #f59e0b; }
+  .ctl-danger { background: transparent; color: #f87171; border-color: #7f1d1d; }
+  .empty { grid-column: 1 / -1; text-align: center; color: #64748b; padding: 60px 0; font-size: 14px; }
+  .empty-icon { font-size: 40px; margin-bottom: 8px; }
+  .empty-sub { font-size: 12px; margin-top: 4px; }
+
+  /* overlay */
+  .mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: flex; align-items: flex-end;
+  }
+  .popup {
+    width: 100%; max-height: 88vh; overflow-y: auto;
+    background: #111c33; border-radius: 16px 16px 0 0;
+    padding: 20px 18px; padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  }
+  .popup-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .field { margin-bottom: 14px; }
+  .label { font-size: 13px; color: #94a3b8; margin-bottom: 6px; }
+  .input {
+    width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+    padding: 10px; font-size: 15px; color: #e2e8f0;
+  }
+  .mode-switch { display: flex; background: #1e293b; border-radius: 10px; padding: 3px; gap: 3px; }
+  .mode-opt { flex: 1; text-align: center; padding: 9px 0; font-size: 14px; border-radius: 8px; color: #94a3b8; cursor: pointer; }
+  .mode-opt.active { background: #3b82f6; color: #fff; font-weight: 600; }
+  .duration { display: flex; align-items: center; gap: 6px; }
+  .num { flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 10px; font-size: 15px; color: #e2e8f0; text-align: center; }
+  .unit { font-size: 13px; color: #94a3b8; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .preset { padding: 6px 11px; background: #1e293b; border: 1px solid #334155; border-radius: 999px; font-size: 12px; color: #cbd5e1; cursor: pointer; }
+  .hint { font-size: 12px; color: #94a3b8; margin: -4px 0 14px; }
+  .popup-btns { display: flex; gap: 10px; }
+  .popup-btn { flex: 1; text-align: center; padding: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .cancel { background: #1e293b; color: #cbd5e1; }
+  .ok { background: #3b82f6; color: #fff; }
+
+  /* ringtone list */
+  .rt-hint { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+  .rt-item {
+    display: flex; align-items: center; gap: 10px; padding: 12px;
+    background: #1e293b; border-radius: 10px; margin-bottom: 8px; border: 1px solid transparent; cursor: pointer;
+  }
+  .rt-item.selected { border-color: #3b82f6; background: rgba(59,130,246,.12); }
+  .rt-name { flex: 1; font-size: 14px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .rt-badge { font-size: 10px; padding: 2px 6px; border-radius: 6px; background: rgba(168,85,247,.18); color: #c084fc; }
+  .rt-play { font-size: 12px; color: #60a5fa; padding: 5px 9px; border: 1px solid #3b82f6; border-radius: 999px; }
+  .rt-check { color: #34d399; font-size: 16px; font-weight: 700; }
+  .rt-del { color: #f87171; font-size: 14px; padding: 4px 6px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="title-row">
+      <div class="title">多路计时器</div>
+      <div class="count">运行 <span id="runningCount">0</span> / 共 <span id="totalCount">0</span> 个</div>
+    </div>
+    <div class="actions">
+      <div class="btn" onclick="startAll()">全部开始</div>
+      <div class="btn" onclick="pauseAll()">全部暂停</div>
+      <div class="btn" onclick="resetAll()">全部重置</div>
+      <div class="btn" onclick="openRingtone()">🔔 提示音</div>
+      <div class="btn btn-primary" onclick="openEditor()">＋ 新建计时器</div>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <!-- 编辑器 -->
+  <div class="mask hidden" id="editorMask">
+    <div class="popup">
+      <div class="popup-title" id="editorTitle">新建计时器</div>
+      <div class="field">
+        <div class="label">名称</div>
+        <input class="input" id="fName" placeholder="例如：煮面、番茄钟、跑步…">
+      </div>
+      <div class="field">
+        <div class="label">计时方式</div>
+        <div class="mode-switch" id="modeSwitch">
+          <div class="mode-opt active" data-mode="countdown">倒计时</div>
+          <div class="mode-opt" data-mode="countup">正计时</div>
+        </div>
+      </div>
+      <div id="durationFields">
+        <div class="field">
+          <div class="label">时长</div>
+          <div class="duration">
+            <input class="num" id="fHours" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">时</span>
+            <input class="num" id="fMinutes" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">分</span>
+            <input class="num" id="fSeconds" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">秒</span>
+          </div>
+        </div>
+        <div class="presets" id="presets"></div>
+      </div>
+      <div class="hint hidden" id="countupHint">正计时从 00:00 开始累计，点「开始」即启动秒表</div>
+      <div class="popup-btns">
+        <div class="popup-btn cancel" onclick="closeEditor()">取消</div>
+        <div class="popup-btn ok" onclick="saveEditor()">保存</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 铃声选择 -->
+  <div class="mask hidden" id="ringtoneMask">
+    <div class="popup">
+      <div class="popup-title">提示音</div>
+      <div class="rt-hint">点条目选中，点「试听」播放</div>
+      <div id="rtList"></div>
+      <div class="popup-btns" style="margin-top:4px">
+        <div class="popup-btn cancel" onclick="importRingtone()">从文件导入</div>
+        <div class="popup-btn ok" onclick="closeRingtone()">完成</div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept="audio/*" class="hidden">
+
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'multitimer_timers_v1';
+  var RINGTONE_KEY = 'multitimer_ringtone_v1';
+  var CUSTOM_RINGTONES_KEY = 'multitimer_custom_ringtones_v1';
+
+  var COLORS = ['#38bdf8','#34d399','#fbbf24','#f472b6','#a78bfa','#fb7185','#22d3ee','#4ade80','#facc15','#fb923c','#e879f9','#60a5fa'];
+
+  var PRESETS = [
+    { label: '1分钟', h: 0, m: 1, s: 0 },
+    { label: '3分钟', h: 0, m: 3, s: 0 },
+    { label: '5分钟', h: 0, m: 5, s: 0 },
+    { label: '10分钟', h: 0, m: 10, s: 0 },
+    { label: '25分钟', h: 0, m: 25, s: 0 },
+    { label: '30分钟', h: 0, m: 30, s: 0 },
+    { label: '1小时', h: 1, m: 0, s: 0 },
+    { label: '2小时', h: 2, m: 0, s: 0 }
+  ];
+
+  var BUILTIN = [
+    { id: 'beep', name: '滴滴滴' },
+    { id: 'chime', name: '叮咚' },
+    { id: 'bell', name: '钟声' },
+    { id: 'alarm', name: '急促警报' },
+    { id: 'piano', name: '上行音阶' }
+  ];
+
+  var STATE_TEXT = { idle: '未开始', running: '运行中', paused: '已暂停', done: '已完成' };
+
+  var timers = [];
+  var colorIndex = 0;
+  var lastAlertAt = 0;
+  var editingId = null;
+  var editorMode = 'countdown';
+  var currentRingtone = { type: 'builtin', id: 'beep' };
+  var customRingtones = [];
+  var audioCtx = null;
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function fmt(ms, roundUp) {
+    var sec = Math.max(0, roundUp ? Math.ceil(ms / 1000) : Math.floor(ms / 1000));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return h > 0 ? pad(h) + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+  }
+  function defaultName(ms) {
+    var sec = Math.round(ms / 1000);
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    var parts = [];
+    if (h) parts.push(h + '小时'); if (m) parts.push(m + '分钟'); if (s) parts.push(s + '秒');
+    return parts.join('') || '计时器';
+  }
+  function normalize(t) {
+    return Object.assign({ mode: 'countdown', durationMs: 0, remainingMs: 0, endAt: 0, elapsedMs: 0, startAt: 0 }, t);
+  }
+  function find(id) { for (var i = 0; i < timers.length; i++) if (timers[i].id === id) return timers[i]; return null; }
+  function nextColor() { return COLORS[colorIndex++ % COLORS.length]; }
+  function saveTimers() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(timers)); } catch (e) {} }
+  function saveSettings() {
+    try {
+      localStorage.setItem(RINGTONE_KEY, JSON.stringify(currentRingtone));
+      localStorage.setItem(CUSTOM_RINGTONES_KEY, JSON.stringify(customRingtones));
+    } catch (e) {}
+  }
+
+  function load() {
+    try { var t = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (Array.isArray(t)) timers = t.map(normalize); } catch (e) {}
+    try { var r = JSON.parse(localStorage.getItem(RINGTONE_KEY)); if (r && r.type) currentRingtone = r; } catch (e) {}
+    try { var c = JSON.parse(localStorage.getItem(CUSTOM_RINGTONES_KEY)); if (Array.isArray(c)) customRingtones = c; } catch (e) {}
+  }
+
+  function vibrate(ms) {
+    try {
+      if (window.Android && window.Android.vibrate) window.Android.vibrate(ms);
+      else if (navigator.vibrate) navigator.vibrate(ms);
+    } catch (e) {}
+  }
+
+  function ensureCtx() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+    return audioCtx;
+  }
+
+  function tone(ctx, freq, offset, dur, vol, decay) {
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    var t0 = ctx.currentTime + offset;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+    if (decay > 0) gain.gain.exponentialRampToValueAtTime(0.0002, t0 + dur);
+    else gain.gain.setValueAtTime(vol, t0 + Math.max(0.01, dur - 0.015));
+    gain.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0); osc.stop(t0 + dur + 0.05);
+  }
+
+  function playBuiltin(id) {
+    var ctx = ensureCtx(); if (!ctx) return;
+    var notes = [];
+    if (id === 'beep') {
+      notes = [ [880,0,0.18], [880,0.30,0.18], [880,0.60,0.18], [1175,0.90,0.32] ];
+      notes.forEach(function (n) { tone(ctx, n[0], n[1], n[2], 0.5, 0); });
+    } else if (id === 'chime') {
+      tone(ctx, 660, 0, 0.22, 0.5, 4); tone(ctx, 880, 0.28, 0.6, 0.5, 4);
+    } else if (id === 'bell') {
+      tone(ctx, 880, 0, 0.9, 0.5, 4);
+    } else if (id === 'alarm') {
+      for (var i = 0; i < 5; i++) { tone(ctx, 700, i * 0.26, 0.13, 0.5, 0); tone(ctx, 980, i * 0.26 + 0.13, 0.13, 0.5, 0); }
+    } else if (id === 'piano') {
+      var fs = [523.25, 587.33, 659.25, 783.99, 1046.5];
+      fs.forEach(function (f, i) { tone(ctx, f, i * 0.22, 0.18, 0.5, 3); });
+    }
+  }
+
+  function audioSrc() {
+    if (currentRingtone.type === 'custom') {
+      for (var i = 0; i < customRingtones.length; i++) if (customRingtones[i].id === currentRingtone.id) return customRingtones[i];
+    }
+    return null;
+  }
+
+  function playRingtone() {
+    var c = audioSrc();
+    if (c && c.dataUrl) {
+      var a = new Audio(c.dataUrl);
+      a.play().catch(function () {});
+      return;
+    }
+    playBuiltin(currentRingtone.id);
+  }
+
+  function alertDone() {
+    var now = Date.now();
+    if (now - lastAlertAt > 800) {
+      lastAlertAt = now;
+      vibrate(400);
+      playRingtone();
+    }
+  }
+
+  // ---------- 渲染 ----------
+  function render() {
+    var now = Date.now();
+    var running = 0;
+    var html = '';
+    for (var i = 0; i < timers.length; i++) {
+      var t = timers[i];
+      var displayMs, progress = 0;
+      if (t.mode === 'countup') {
+        if (t.state === 'running') { running++; displayMs = t.elapsedMs + (now - t.startAt); }
+        else displayMs = t.elapsedMs;
+      } else {
+        var rem = t.remainingMs;
+        if (t.state === 'running') {
+          running++;
+          rem = t.endAt - now;
+          if (rem <= 0) {
+            t.state = 'done'; t.remainingMs = 0; t.endAt = 0; rem = 0;
+            saveTimers(); alertDone();
+          }
+        } else if (t.state === 'done') { rem = 0; }
+        displayMs = rem;
+        progress = t.durationMs > 0 ? Math.max(0, Math.min(1, 1 - rem / t.durationMs)) : 0;
+      }
+      var modeTag = t.mode === 'countup' ? '<span class="mode-tag">正计时</span>' : '';
+      var progressHtml = t.mode === 'countdown'
+        ? '<div class="progress"><div class="progress-bar" style="width:' + (progress * 100).toFixed(2) + '%;background:' + t.color + '"></div></div>'
+        : '<div style="height:5px;margin-bottom:10px"></div>';
+      var startBtn = t.state === 'running'
+        ? '<span class="ctl ctl-warn" onclick="pauseTimer(\'' + t.id + '\')">暂停</span>'
+        : '<span class="ctl ctl-start" onclick="startTimer(\'' + t.id + '\')">开始</span>';
+      html += '<div class="card ' + t.state + '" style="border-left:4px solid ' + t.color + '">'
+        + '<div class="card-head"><span class="dot" style="background:' + t.color + '"></span><span class="name">' + esc(t.name) + '</span></div>'
+        + '<div class="tags">' + modeTag + '<span class="tag tag-' + t.state + '">' + STATE_TEXT[t.state] + '</span></div>'
+        + '<div class="time" style="color:' + t.color + '">' + fmt(displayMs, t.mode === 'countdown') + '</div>'
+        + progressHtml
+        + '<div class="controls">' + startBtn
+        + '<span class="ctl" onclick="resetTimer(\'' + t.id + '\')">重置</span>'
+        + '<span class="ctl" onclick="openEditor(\'' + t.id + '\')">编辑</span>'
+        + '<span class="ctl ctl-danger" onclick="deleteTimer(\'' + t.id + '\')">删除</span>'
+        + '</div></div>';
+    }
+    if (!timers.length) {
+      html = '<div class="empty"><div class="empty-icon">⏱</div><div>还没有计时器</div><div class="empty-sub">点「＋ 新建计时器」，可同时开 10 个以上</div></div>';
+    }
+    document.getElementById('grid').innerHTML = html;
+    document.getElementById('runningCount').textContent = running;
+    document.getElementById('totalCount').textContent = timers.length;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---------- 计时器操作 ----------
+  window.startTimer = function (id) { var t = find(id); if (!t) return; startOne(t); saveTimers(); render(); };
+  window.pauseTimer = function (id) { var t = find(id); if (!t || t.state !== 'running') return; pauseOne(t); saveTimers(); render(); };
+  window.resetTimer = function (id) { var t = find(id); if (!t) return; resetOne(t); saveTimers(); render(); };
+  window.deleteTimer = function (id) {
+    if (!confirm('确定删除该计时器吗？')) return;
+    timers = timers.filter(function (t) { return t.id !== id; });
+    saveTimers(); render();
+  };
+  function startOne(t) {
+    var now = Date.now();
+    if (t.mode === 'countup') {
+      if (t.state === 'paused') { t.state = 'running'; t.startAt = now; }
+      else { t.elapsedMs = 0; t.startAt = now; t.state = 'running'; }
+    } else {
+      if (t.state === 'done' || t.state === 'idle') t.remainingMs = t.durationMs;
+      t.state = 'running'; t.endAt = now + t.remainingMs;
+    }
+  }
+  function pauseOne(t) {
+    var now = Date.now();
+    if (t.mode === 'countup') { t.elapsedMs += now - t.startAt; t.startAt = 0; }
+    else { t.remainingMs = Math.max(0, t.endAt - now); t.endAt = 0; }
+    t.state = 'paused';
+  }
+  function resetOne(t) {
+    t.state = 'idle';
+    if (t.mode === 'countup') { t.elapsedMs = 0; t.startAt = 0; }
+    else { t.remainingMs = t.durationMs; t.endAt = 0; }
+  }
+  window.startAll = function () {
+    var changed = false;
+    timers.forEach(function (t) {
+      if (t.state === 'idle' || t.state === 'done' || t.state === 'paused') { startOne(t); changed = true; }
+    });
+    if (changed) { saveTimers(); render(); }
+  };
+  window.pauseAll = function () {
+    var changed = false;
+    timers.forEach(function (t) { if (t.state === 'running') { pauseOne(t); changed = true; } });
+    if (changed) { saveTimers(); render(); }
+  };
+  window.resetAll = function () {
+    timers.forEach(resetOne); saveTimers(); render();
+  };
+
+  // ---------- 编辑器 ----------
+  var editorMask = document.getElementById('editorMask');
+  var modeSwitch = document.getElementById('modeSwitch');
+  var presetsEl = document.getElementById('presets');
+
+  function buildPresets() {
+    presetsEl.innerHTML = PRESETS.map(function (p) {
+      return '<span class="preset" onclick="pickPreset(' + p.h + ',' + p.m + ',' + p.s + ')">' + p.label + '</span>';
+    }).join('');
+  }
+  window.pickPreset = function (h, m, s) {
+    document.getElementById('fHours').value = h;
+    document.getElementById('fMinutes').value = m;
+    document.getElementById('fSeconds').value = s;
+  };
+
+  modeSwitch.addEventListener('click', function (e) {
+    var el = e.target.closest('.mode-opt'); if (!el) return;
+    editorMode = el.getAttribute('data-mode');
+    Array.prototype.forEach.call(modeSwitch.children, function (c) { c.classList.toggle('active', c === el); });
+    updateEditorMode();
+  });
+
+  function updateEditorMode() {
+    document.getElementById('durationFields').classList.toggle('hidden', editorMode === 'countup');
+    document.getElementById('countupHint').classList.toggle('hidden', editorMode !== 'countup');
+  }
+
+  window.openEditor = function (id) {
+    ensureCtx();
+    editingId = id || null;
+    document.getElementById('editorTitle').textContent = id ? '编辑计时器' : '新建计时器';
+    document.getElementById('fName').value = '';
+    document.getElementById('fHours').value = ''; document.getElementById('fMinutes').value = ''; document.getElementById('fSeconds').value = '';
+    if (id) {
+      var t = find(id);
+      document.getElementById('fName').value = t.name;
+      editorMode = t.mode;
+      var sec = Math.round(t.durationMs / 1000);
+      document.getElementById('fHours').value = Math.floor(sec / 3600);
+      document.getElementById('fMinutes').value = Math.floor((sec % 3600) / 60);
+      document.getElementById('fSeconds').value = sec % 60;
+    } else {
+      editorMode = 'countdown';
+    }
+    Array.prototype.forEach.call(modeSwitch.children, function (c) { c.classList.toggle('active', c.getAttribute('data-mode') === editorMode); });
+    updateEditorMode();
+    editorMask.classList.remove('hidden');
+  };
+  window.closeEditor = function () { editorMask.classList.add('hidden'); };
+  window.saveEditor = function () {
+    var name = document.getElementById('fName').value.trim();
+    var h = parseInt(document.getElementById('fHours').value, 10) || 0;
+    var m = parseInt(document.getElementById('fMinutes').value, 10) || 0;
+    var s = parseInt(document.getElementById('fSeconds').value, 10) || 0;
+    var durationMs = h * 3600000 + m * 60000 + s * 1000;
+    var isCountup = editorMode === 'countup';
+    if (!isCountup && durationMs <= 0) { alert('请设置时长'); return; }
+    var finalName = name || (isCountup ? '正计时' : defaultName(durationMs));
+
+    if (editingId) {
+      var t = find(editingId);
+      if (t) {
+        t.name = finalName;
+        if (t.mode !== editorMode) {
+          t.mode = editorMode; t.state = 'idle'; t.endAt = 0; t.startAt = 0; t.elapsedMs = 0;
+          if (isCountup) { t.durationMs = 0; t.remainingMs = 0; }
+          else { t.durationMs = durationMs; t.remainingMs = durationMs; }
+        } else if (!isCountup) {
+          var now = Date.now();
+          if (t.state === 'idle' || t.state === 'done') t.remainingMs = durationMs;
+          else if (t.state === 'paused') t.remainingMs = Math.min(t.remainingMs, durationMs);
+          else if (t.state === 'running') { var rem = t.endAt - now; if (rem > durationMs) t.endAt = now + durationMs; }
+          t.durationMs = durationMs;
+        }
+      }
+    } else {
+      timers.push({
+        id: 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+        name: finalName, mode: isCountup ? 'countup' : 'countdown',
+        durationMs: isCountup ? 0 : durationMs, state: 'idle',
+        remainingMs: isCountup ? 0 : durationMs, endAt: 0, elapsedMs: 0, startAt: 0,
+        color: nextColor()
+      });
+    }
+    closeEditor(); saveTimers(); render();
+  };
+
+  // ---------- 铃声 ----------
+  var ringtoneMask = document.getElementById('ringtoneMask');
+  var rtList = document.getElementById('rtList');
+  var fileInput = document.getElementById('fileInput');
+
+  function renderRingtoneList() {
+    var items = BUILTIN.map(function (r) {
+      return { id: r.id, name: r.name, type: 'builtin', selected: currentRingtone.type === 'builtin' && currentRingtone.id === r.id };
+    });
+    customRingtones.forEach(function (r) {
+      items.push({ id: r.id, name: r.name, type: 'custom', selected: currentRingtone.type === 'custom' && currentRingtone.id === r.id });
+    });
+    rtList.innerHTML = items.map(function (it) {
+      var badge = it.type === 'custom' ? '<span class="rt-badge">自定义</span>' : '';
+      var check = it.selected ? '<span class="rt-check">✓</span>' : '';
+      var del = it.type === 'custom' ? '<span class="rt-del" onclick="event.stopPropagation();deleteCustomRingtone(\'' + it.id + '\')">✕</span>' : '';
+      return '<div class="rt-item ' + (it.selected ? 'selected' : '') + '" onclick="selectRingtone(\'' + it.type + '\',\'' + it.id + '\')">'
+        + '<span class="rt-name">' + esc(it.name) + '</span>' + badge
+        + '<span class="rt-play" onclick="event.stopPropagation();previewRingtone(\'' + it.type + '\',\'' + it.id + '\')">试听</span>'
+        + check + del + '</div>';
+    }).join('');
+  }
+  window.openRingtone = function () { ensureCtx(); renderRingtoneList(); ringtoneMask.classList.remove('hidden'); };
+  window.closeRingtone = function () { ringtoneMask.classList.add('hidden'); };
+  window.selectRingtone = function (type, id) {
+    currentRingtone = { type: type, id: id }; saveSettings(); renderRingtoneList();
+  };
+  window.previewRingtone = function (type, id) {
+    if (type === 'custom') {
+      for (var i = 0; i < customRingtones.length; i++) if (customRingtones[i].id === id) {
+        var a = new Audio(customRingtones[i].dataUrl); a.play().catch(function () {}); return;
+      }
+    }
+    playBuiltin(id);
+  };
+  window.deleteCustomRingtone = function (id) {
+    if (!confirm('确定删除这个自定义提示音吗？')) return;
+    customRingtones = customRingtones.filter(function (r) { return r.id !== id; });
+    if (currentRingtone.type === 'custom' && currentRingtone.id === id) currentRingtone = { type: 'builtin', id: 'beep' };
+    saveSettings(); renderRingtoneList();
+  };
+  window.importRingtone = function () { fileInput.click(); };
+  fileInput.addEventListener('change', function () {
+    var f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { alert('文件过大（最大 2MB）'); fileInput.value = ''; return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var item = { id: 'c_' + Date.now().toString(36), name: f.name, dataUrl: reader.result };
+      customRingtones.push(item);
+      currentRingtone = { type: 'custom', id: item.id };
+      saveSettings(); renderRingtoneList();
+    };
+    reader.readAsDataURL(f);
+    fileInput.value = '';
+  });
+
+  // ---------- 启动 ----------
+  load();
+  buildPresets();
+  render();
+  setInterval(render, 250);
+
+  document.addEventListener('click', function () { ensureCtx(); }, true);
+})();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+</script>
+</body>
+</html>
