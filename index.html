@@ -90,8 +90,10 @@
   .mode-switch { display: flex; background: #1e293b; border-radius: 10px; padding: 3px; gap: 3px; }
   .mode-opt { flex: 1; text-align: center; padding: 9px 0; font-size: 14px; border-radius: 8px; color: #94a3b8; cursor: pointer; }
   .mode-opt.active { background: #3b82f6; color: #fff; font-weight: 600; }
-  .duration { display: flex; align-items: center; gap: 6px; }
-  .num { flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 10px; font-size: 15px; color: #e2e8f0; text-align: center; }
+  .duration { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dur-field { display: flex; align-items: center; gap: 8px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 0 12px; }
+  .dur-field.full { grid-column: 1 / -1; }
+  .num { flex: 1; min-width: 0; background: transparent; border: none; padding: 10px 0; font-size: 15px; color: #e2e8f0; text-align: center; }
   .unit { font-size: 13px; color: #94a3b8; }
   .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .preset { padding: 6px 11px; background: #1e293b; border: 1px solid #334155; border-radius: 999px; font-size: 12px; color: #cbd5e1; cursor: pointer; }
@@ -152,9 +154,15 @@
         <div class="field">
           <div class="label">时长</div>
           <div class="duration">
-            <input class="num" id="fHours" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">时</span>
-            <input class="num" id="fMinutes" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">分</span>
-            <input class="num" id="fSeconds" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">秒</span>
+            <div class="dur-field">
+              <input class="num" id="fHours" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">时</span>
+            </div>
+            <div class="dur-field">
+              <input class="num" id="fMinutes" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">分</span>
+            </div>
+            <div class="dur-field full">
+              <input class="num" id="fSeconds" type="number" min="0" inputmode="numeric" placeholder="0"><span class="unit">秒</span>
+            </div>
           </div>
         </div>
         <div class="presets" id="presets"></div>
